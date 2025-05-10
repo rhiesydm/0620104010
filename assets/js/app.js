@@ -4,23 +4,223 @@ document.addEventListener("DOMContentLoaded", () => {
   const taskInput = document.getElementById("task-input");
   const errorMessageContainer = document.getElementById("error-message");
   const taskList = document.getElementById("task-list");
-  const taskItems = document.querySelectorAll(".task-item");
+
+  // Modal elements
+  const editModal = document.getElementById("edit-modal");
+  const editTaskInput = document.getElementById("edit-task-input");
+  const editTaskId = document.getElementById("edit-task-id");
+  const saveEditBtn = document.getElementById("save-edit-btn");
+  const cancelEditBtn = document.getElementById("cancel-edit-btn");
+  const modalError = document.getElementById("modal-error");
 
   // Fungsi untuk menampilkan pesan error
-  const showError = (message) => {
-    errorMessageContainer.textContent = message;
-    errorMessageContainer.classList.remove("hidden");
+  const showError = (message, container = errorMessageContainer) => {
+    container.querySelector("span").textContent = message;
+    container.classList.remove("hidden");
 
     // Otomatis menghilangkan pesan error setelah 5 detik
     setTimeout(() => {
-      errorMessageContainer.style.opacity = "0";
-      errorMessageContainer.style.transition = "opacity 1s";
+      container.style.opacity = "0";
+      container.style.transition = "opacity 1s";
 
       setTimeout(() => {
-        errorMessageContainer.classList.add("hidden");
-        errorMessageContainer.style.opacity = "1";
+        container.classList.add("hidden");
+        container.style.opacity = "1";
       }, 1000);
     }, 5000);
+  };
+
+  // Fungsi untuk menampilkan modal
+  const showModal = (taskId, taskText) => {
+    // Set nilai input dan ID
+    editTaskInput.value = taskText;
+    editTaskId.value = taskId;
+
+    // Tampilkan modal
+    editModal.classList.remove("hidden");
+
+    // Focus pada input
+    setTimeout(() => {
+      editTaskInput.focus();
+
+      // Posisikan kursor di akhir teks
+      const inputLength = editTaskInput.value.length;
+      editTaskInput.setSelectionRange(inputLength, inputLength);
+    }, 100);
+
+    // Tambahkan event listener untuk menutup modal dengan Escape
+    document.addEventListener("keydown", handleEscapeKey);
+  };
+
+  // Fungsi untuk menyembunyikan modal
+  const hideModal = () => {
+    // Tambahkan class closing untuk animasi
+    editModal.classList.add("closing");
+    editModal.querySelector(".modal-container").classList.add("closing");
+
+    // Tunggu animasi selesai sebelum menyembunyikan modal
+    setTimeout(() => {
+      editModal.classList.add("hidden");
+      editModal.classList.remove("closing");
+      editModal.querySelector(".modal-container").classList.remove("closing");
+
+      // Reset nilai
+      editTaskInput.value = "";
+      editTaskId.value = "";
+      modalError.classList.add("hidden");
+    }, 300);
+
+    // Hapus event listener
+    document.removeEventListener("keydown", handleEscapeKey);
+  };
+
+  // Handler untuk tombol Escape
+  const handleEscapeKey = (e) => {
+    if (e.key === "Escape") {
+      hideModal();
+    }
+  };
+
+  // Event listener untuk tombol cancel pada modal
+  cancelEditBtn.addEventListener("click", hideModal);
+
+  // Event listener untuk klik di luar modal untuk menutupnya
+  editModal.addEventListener("click", (e) => {
+    if (e.target === editModal) {
+      hideModal();
+    }
+  });
+
+  // Event listener untuk tombol save pada modal
+  saveEditBtn.addEventListener("click", () => {
+    const taskId = editTaskId.value;
+    const newText = editTaskInput.value.trim();
+
+    if (newText === "") {
+      showError("Tugas tidak boleh kosong!", modalError);
+      return;
+    }
+
+    // Gunakan fungsi editTaskById
+    window
+      .editTaskById(taskId, newText)
+      .then(() => {
+        hideModal();
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showError(error, modalError);
+      });
+  });
+
+  // Handle Enter key in edit input
+  editTaskInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      saveEditBtn.click();
+    }
+  });
+
+  // Fungsi untuk mengedit tugas berdasarkan ID
+  window.editTaskById = (taskId, newText) => {
+    if (!taskId || !newText || newText.trim() === "") {
+      showError("ID tugas dan teks baru diperlukan");
+      return Promise.reject("ID tugas dan teks baru diperlukan");
+    }
+
+    return fetch("index.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: new URLSearchParams({
+        action: "edit",
+        id: taskId,
+        task: newText.trim(),
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          // Update teks tugas di DOM jika elemen ada
+          const taskItem = document.querySelector(
+            `.task-item[data-id="${taskId}"]`,
+          );
+          if (taskItem) {
+            const taskLabel = taskItem.querySelector(".task-label");
+            taskLabel.textContent = newText.trim();
+
+            // Update data-text attribute pada tombol edit
+            const editBtn = taskItem.querySelector(".edit-btn");
+            if (editBtn) {
+              editBtn.setAttribute("data-text", newText.trim());
+            }
+          }
+          return data;
+        } else {
+          showError(data.message);
+          return Promise.reject(data.message);
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showError("Terjadi kesalahan saat mengedit tugas");
+        return Promise.reject(error);
+      });
+  };
+
+  // Fungsi untuk mendapatkan semua tugas
+  window.getAllTasks = () => {
+    return fetch("index.php?action=get_tasks", {
+      method: "GET",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          return data.tasks;
+        } else {
+          showError(data.message);
+          return Promise.reject(data.message);
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showError("Terjadi kesalahan saat mengambil tugas");
+        return Promise.reject(error);
+      });
+  };
+
+  // Fungsi untuk mendapatkan tugas berdasarkan ID
+  window.getTaskById = (taskId) => {
+    if (!taskId) {
+      showError("ID tugas diperlukan");
+      return Promise.reject("ID tugas diperlukan");
+    }
+
+    return fetch(`index.php?action=get_task&id=${taskId}`, {
+      method: "GET",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          return data.task;
+        } else {
+          showError(data.message);
+          return Promise.reject(data.message);
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        showError("Terjadi kesalahan saat mengambil tugas");
+        return Promise.reject(error);
+      });
   };
 
   // Menambahkan event listener untuk pengiriman formulir
@@ -63,101 +263,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // Fokus pada kolom input saat halaman dimuat
   taskInput.focus();
 
-  // Menangani fitur edit tugas
+  // Menangani fitur edit tugas dengan modal
   document.querySelectorAll(".edit-btn").forEach((editBtn) => {
     editBtn.addEventListener("click", () => {
       const taskId = editBtn.dataset.id;
-      const taskItem = document.querySelector(
-        `.task-item[data-id="${taskId}"]`,
-      );
-      const taskView = taskItem.querySelector(".task-view");
-      const taskEdit = taskItem.querySelector(".task-edit");
-      const editInput = taskItem.querySelector(".edit-input");
+      const taskText = editBtn.dataset.text;
 
-      // Sembunyikan semua form edit lainnya
-      document.querySelectorAll(".task-edit").forEach((edit) => {
-        if (edit !== taskEdit) {
-          edit.classList.add("hidden");
-        }
-      });
-      document.querySelectorAll(".task-view").forEach((view) => {
-        if (view !== taskView) {
-          view.classList.remove("hidden");
-        }
-      });
-
-      // Tampilkan form edit untuk tugas ini
-      taskView.classList.add("hidden");
-      taskEdit.classList.remove("hidden");
-      editInput.focus();
-
-      // Posisikan kursor di akhir teks
-      const inputLength = editInput.value.length;
-      editInput.setSelectionRange(inputLength, inputLength);
-    });
-  });
-
-  // Menangani tombol cancel pada form edit
-  document.querySelectorAll(".cancel-btn").forEach((cancelBtn) => {
-    cancelBtn.addEventListener("click", () => {
-      const taskItem = cancelBtn.closest(".task-item");
-      const taskView = taskItem.querySelector(".task-view");
-      const taskEdit = taskItem.querySelector(".task-edit");
-
-      taskView.classList.remove("hidden");
-      taskEdit.classList.add("hidden");
-    });
-  });
-
-  // Menangani tombol save pada form edit
-  document.querySelectorAll(".save-btn").forEach((saveBtn) => {
-    saveBtn.addEventListener("click", () => {
-      const taskId = saveBtn.dataset.id;
-      const taskItem = document.querySelector(
-        `.task-item[data-id="${taskId}"]`,
-      );
-      const editInput = taskItem.querySelector(".edit-input");
-      const taskLabel = taskItem.querySelector(".task-label");
-      const taskView = taskItem.querySelector(".task-view");
-      const taskEdit = taskItem.querySelector(".task-edit");
-
-      const newText = editInput.value.trim();
-
-      if (newText === "") {
-        showError("Tugas tidak boleh kosong!");
-        return;
-      }
-
-      // Kirim data menggunakan fetch API
-      fetch("index.php", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "X-Requested-With": "XMLHttpRequest",
-        },
-        body: new URLSearchParams({
-          action: "edit",
-          id: taskId,
-          task: newText,
-        }),
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          if (data.success) {
-            // Update teks tugas di DOM
-            taskLabel.textContent = newText;
-
-            // Sembunyikan form edit
-            taskView.classList.remove("hidden");
-            taskEdit.classList.add("hidden");
-          } else {
-            showError(data.message);
-          }
-        })
-        .catch((error) => {
-          console.error("Error:", error);
-          showError("Terjadi kesalahan saat mengedit tugas");
-        });
+      // Tampilkan modal edit
+      showModal(taskId, taskText);
     });
   });
 
