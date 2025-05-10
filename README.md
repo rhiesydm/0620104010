@@ -53,6 +53,6 @@ Aplikasi Todo List ini memungkinkan pengguna untuk menambahkan, menandai sebagai
 - **HTML5** - Untuk struktur halaman
 - **JavaScript** - Untuk interaksi pengguna di sisi klien
 
-## Hak Cipta
+## Kontributor
 
-&copy; 2025 Ary Syaddam.
+- [Ary Syaddam](https://github.com/rhiesydm/)
